@@ -1,7 +1,6 @@
 from . import Optimizer
 import tensorflow as tf
 import numpy as np
-import time
 
 class SVGD(Optimizer):
     def __init__(self):
