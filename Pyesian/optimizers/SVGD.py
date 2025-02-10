@@ -1,7 +1,7 @@
 from . import Optimizer
 import tensorflow as tf
 import numpy as np
-from tqdm import tqdm
+import time
 
 class SVGD(Optimizer):
     def __init__(self):
@@ -24,25 +24,30 @@ class SVGD(Optimizer):
             updated_particles = np.copy(self._particles[i])
             particles = tf.convert_to_tensor(self._particles[i])
             self._pack_weights(particles, self._base_model)
-            k = self._rbf_kernel(particles, particles, self._M)
-            print(i, particles.shape)
-            for j, particle in tqdm(enumerate(particles)):
-                with tf.GradientTape(persistent=True) as tape:
-                    tape.watch(particles)
-                    k = self._rbf_kernel(particles, particle, self._M)
-                    predictions = self._base_model(samples)
-                    log_likelihood = -self._dataset.loss()(labels, predictions)
-                    log_prob_prior = self._calculate_log_prob_particles(particles)
-                    
-                dk = tf.cast(tape.gradient(k, particles), tf.float32)
+
+            num_samples = tf.cast(tf.shape(samples)[0], tf.float32)
+            with tf.GradientTape(persistent=True) as tape:
+                tape.watch(particles)
+                log_prob_prior = self._calculate_log_prob_particles(particles)
+                predictions = self._base_model(samples)
+                log_likelihood = -self._dataset.loss()(labels, predictions)
                 dll = tape.gradient(log_likelihood, self._base_model.trainable_variables)
                 dll = tf.concat([tf.reshape(grad, [-1]) for grad in dll], axis=0)
                 dlpp = tf.cast(tape.gradient(log_prob_prior, particles), tf.float32)
-                
-                total_loss += log_likelihood/(samples.shape[0] * self._M * particles.shape[0])
 
-                phi = (1/self._M) * tf.reduce_sum(k * (dll + dlpp) + dk)
-                updated_particles[j] += self._hyperparameters.lr * phi
+                k_matrix = self._rbf_kernel(particles, particles, self._M)
+                dk_matrix = tf.cast(tape.gradient(k_matrix, particles), tf.float32)
+            del tape
+
+            total_loss = log_likelihood / (num_samples * self._M)
+
+            phi = (1/self._M) * (
+                tf.reduce_sum(k_matrix * (dll + dlpp), axis=0) +
+                tf.reduce_sum(dk_matrix, axis=0)
+            )
+
+            particles = tf.cast(particles, tf.float32)
+            updated_particles = particles + self._hyperparameters.lr * phi
             self._particles[i] = updated_particles
                 
         return -1*total_loss
@@ -50,6 +55,8 @@ class SVGD(Optimizer):
     def _init_particles(self):
         self._particles = np.zeros((self._M, self._num_particles))
         priors = self._prior.get_model_priors(self._base_model)
+        samples = np.asarray(list(self._training_dataset.map(lambda x, y: x)))
+        self._num_datapoints = samples.shape[0]
         for i in range(self._M):
             trainable_weights = np.array([])
             for layer in priors:
@@ -60,9 +67,6 @@ class SVGD(Optimizer):
                     trainable_weights = np.concatenate((trainable_weights, weights.numpy().flatten()))
 
             self._particles[i, :] = trainable_weights
-
-            samples = np.asarray(list(self._training_dataset.map(lambda x, y: x)))
-            self._num_datapoints = samples.shape[0]
 
     def _unpack_weights(self):
         return np.array([x for v in self._base_model.trainable_variables for x in v.numpy().flatten()])
