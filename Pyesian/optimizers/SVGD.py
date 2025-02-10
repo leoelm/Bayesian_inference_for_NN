@@ -31,13 +31,12 @@ class SVGD(Optimizer):
                 log_prob_prior = self._calculate_log_prob_particles(particles)
                 predictions = self._base_model(samples)
                 log_likelihood = -self._dataset.loss()(labels, predictions)
-                dll = tape.gradient(log_likelihood, self._base_model.trainable_variables)
-                dll = tf.concat([tf.reshape(grad, [-1]) for grad in dll], axis=0)
-                dlpp = tf.cast(tape.gradient(log_prob_prior, particles), tf.float32)
-
                 k_matrix = self._rbf_kernel(particles, particles, self._M)
-                dk_matrix = tf.cast(tape.gradient(k_matrix, particles), tf.float32)
-            del tape
+
+            dll = tape.gradient(log_likelihood, self._base_model.trainable_variables)
+            dll = tf.concat([tf.reshape(grad, [-1]) for grad in dll], axis=0)
+            dlpp = tf.cast(tape.gradient(log_prob_prior, particles), tf.float32)
+            dk_matrix = tf.cast(tape.gradient(k_matrix, particles), tf.float32)
 
             total_loss = log_likelihood / (num_samples * self._M)
 
