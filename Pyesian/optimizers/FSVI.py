@@ -4,50 +4,6 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 
-class SpectralSteinEstimator:
-    def __init__(self):
-        pass
-
-    def _rbf_kernel(self, x, y, length_scale=1, variance=1):
-        dist = tf.reduce_sum(x**2, axis=1, keepdims=True) - 2 * tf.matmul(x, y, transpose_b=True) + tf.reduce_sum(y**2, axis=1)
-        return variance * tf.exp(-dist / (2 * length_scale**2))
-    
-    def _compute_stein_kernel(self, x, y, score_func, sigma):
-        with tf.GradientTape() as tape:
-            tape.watch(x)
-            k = self._rbf_kernel(x, y, sigma)
-
-            score = score_func(x)
-            grad_k = tape.gradient(k, x)[0]
-            print(grad_k.shape)
-            print(score.shape)
-            print(k.shape)
-            print(tf.matmul(k, score).shape)
-            stein_mat = grad_k + tf.matmul(k, score)
-
-        return stein_mat, k
-    
-    def _extract_eigenfunctions(stein_mat, num_eigen=5):
-        vals, vecs = tf.linalg.eigh(stein_mat)
-        return vals[:num_eigen], vecs[:, :num_eigen]
-    
-    def compute_gradients(self, samples, bnn_output, score_func, prior, num_eigen=5, sigma=1):
-
-        prior_mean = prior.mean()
-        prior_cov = self._rbf_kernel(samples, samples, sigma)
-        score_prior = score_func(bnn_output, prior_mean, prior_cov)
-
-        stein_mat, _ = self._compute_stein_kernel(samples, samples, lambda x: score_prior, sigma)
-        eigenvalues, eigenfunctions = self._extract_eigenfunctions(stein_mat, num_eigen=num_eigen)
-        
-        gradient = 0
-        for val, vec in zip(eigenvalues, eigenfunctions):
-            weight = 1.0 / val
-            gradient += weight * vec
-
-        return gradient
-        
-
 class FSVI(Optimizer):
     """
     FSVI is a class that inherits from Optimizer.\n
@@ -73,130 +29,98 @@ class FSVI(Optimizer):
         self._posterior_stds = []
         self._weights = None
 
-    def _sample_model_weights(self):
-        for layer_idx in range(len(self._base_model.layers)):
-            layer = self._base_model.layers[layer_idx]
-            if len(layer.trainable_variables) != 0:
-                for i in range(len(layer.trainable_variables)):
-                    weight = tfp.distributions.Normal(self._posterior_means[layer_idx][i], self._posterior_stds[layer_idx][i]).sample()
-                    self._base_model.layers[layer_idx].trainable_variables[i].assign(weight)
-
-    def _calculate_log_likelihood(self, prediction: tf.Tensor, labels: tf.Tensor, sigma=1.0):
-        n = prediction.shape[0]
-        return -(n*tf.math.log(2*np.pi))/2 - (n*tf.math.log(sigma**2))/2 - (1/(2*sigma**2))*tf.reduce_sum(tf.square(prediction - labels))
-
-    def _sample_gp_prior(self, index_points, lengthscale=1, variance=1, jitter=1e-6):
-        K = tfp.math.psd_kernels.ExponentiatedQuadratic(length_scale = lengthscale, amplitude = variance).apply(index_points, index_points)
-        num_points = tf.shape(index_points)[0]
-        K += jitter * tf.eye(num_points)
-        L = tf.linalg.cholesky(K)
-        z = tf.random.normal(shape=(num_points, 1))
-        return tf.matmul(L, z)
-    
-    def _kde_estimate(self, f, f_samples, bandwidth=0.1):
-        f_flat = tf.reshape(f, [-1])
-        M = tf.shape(f_samples)[0]
-        densities = []
-
-        for i in range(M):
-            f_i = tf.reshape(f_samples[i], [-1])
-            diff = f_flat - f_i
-            exponent = -0.5 * tf.reduce_sum(tf.square(diff)) / (bandwidth ** 2)
-
-            d = tf.cast(tf.size(f_flat), tf.float32)
-            norm_const = tf.pow(2.0 * np.pi * (bandwidth ** 2), d / 2)
-            densities.append(tf.exp(exponent) / norm_const)
-        densities = tf.stack(densities)
-        return tf.reduce_mean(densities)
-    
-    def _compute_log_gp_density(self, f, anchor_points, lengthscale=1.0, variance=1.0, jitter=1e-6):
-        K = tfp.math.psd_kernels.ExponentiatedQuadratic(length_scale = lengthscale, amplitude = variance).apply(anchor_points, anchor_points)
-        n = tf.shape(anchor_points)[0]
-        K += jitter * tf.eye(n, dtype=tf.float32)
-        
-        # Cholesky factorization.
-        L = tf.linalg.cholesky(K)
-        
-        # Solve for alpha: K^{-1} f = L^{-T}(L^{-1} f)
-        alpha = tf.linalg.cholesky_solve(L, f)
-        
-        # Compute log-determinant from the Cholesky factor.
-        log_det_K = 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(L)))
-        
-        n_float = tf.cast(n, tf.float32)
-        log_prob = -0.5 * tf.matmul(tf.transpose(f), alpha)
-        log_prob -= 0.5 * n_float * tf.math.log(2.0 * np.pi)
-        log_prob -= 0.5 * log_det_K
-        return tf.squeeze(log_prob)  # scalar
-    
-    def _estimate_kl(self, x, mc_samples=10):
-
-        f_samples = []
-        for _ in range(mc_samples):
-            f_samples.append(self._base_model(x))
-        
-        for i in range(mc_samples):
-            f_i = f_samples[i]
-            q_f = self._kde_estimate(f_i, f_samples)
-            log_p = self._compute_log_gp_density(f_i, x)
-
-
     def step(self, save_document_path=None):
         X_D, X_M = self._generate_measurement_set()
+        X_M = tf.cast(X_M, dtype=tf.float32)
+        X_D = tf.cast(X_D, dtype=tf.float32)
+        total_dll = None
+        total_dkl = None
 
+        function_prior = tfp.distributions.GaussianProcessRegressionModel(kernel=tfp.math.psd_kernels.ExponentiatedQuadratic(), observation_index_points=X_D[0], observations=X_D[1], index_points=X_M)
         for i in range(self._k):
             self._pack_weights(self._weights[i], self._base_model)
             batch_X, batch_Y = X_D
-            y_pred = self._base_model(batch_X, training=True)
 
             # get Log Likelihood Loss
-            log_likelihood = self._calculate_log_likelihood(y_pred, batch_Y)
+            with tf.GradientTape(persistent=True) as tape:
+                y_pred_d = self._base_model(batch_X, training=True)
+                log_likelihood = self._dataset.loss()(y_pred_d, batch_Y)
 
-            kl_estimate = self._estimate_kl(X_M)
+                variational_mean = tf.cast(tf.math.reduce_mean(y_pred_d), dtype=tf.float32)
+                variational_cov = tf.cast(tfp.stats.covariance(y_pred_d), dtype=tf.float32)
+                variational_dist = tfp.distributions.Normal(variational_mean, variational_cov)
 
-            print(log_likelihood)
-            print(kl_estimate)
+                kl_estimate = 0
+                preds = self._base_model(X_M)
+                print(tf.transpose(preds).shape)
+                log_p_all = function_prior.log_prob(tf.transpose(preds))
+                for sample, log_p in zip(X_M, log_p_all):
+                    sample = tf.cast(sample, tf.float32)
+                    pred = self._base_model(sample)
+                    log_q = variational_dist.log_prob(pred)
+                    # log_p = function_prior.log_prob(pred)
+                    print(log_p)
 
-        # X_Ds, X_M = self._generate_measurement_set()
+                    q = variational_dist.prob(pred)
 
-        # total_gradient = None
+                    kl_estimate += q * (log_q - log_p)
+                kl_estimate *= self._lambda
+
+
+            dll = tape.gradient(log_likelihood, self._base_model.trainable_variables)
+            dll = tf.concat([tf.reshape(grad, [-1]) for grad in dll], axis=0)
+            dll = (1/self._batch_size) * dll
+
+            if total_dll is None:
+                total_dll = dll
+            else:
+                total_dll += dll
+
+            dkl = tape.gradient(kl_estimate, self._base_model.trainable_variables)
+            dkl = tf.concat([tf.reshape(grad, [-1]) for grad in dkl], axis=0)
+
+            if total_dkl is None:
+                total_dkl = dkl
+            else:
+                total_dkl += dkl
+
+        print(total_dkl)
+        
+        # predictions = []
         # for i in range(self._k):
-        #     with tf.GradientTape(persistent=True) as tape:
-        #         self._pack_weights(self._weights[i], self._base_model)
-        #         features, labels = X_Ds
-        #         noise = tfp.distributions.Normal(
-        #                     tf.zeros(self._feature_dim),
-        #                     tf.ones(self._feature_dim)).sample()
-        #         noisy_features = features + tf.cast(noise, tf.float32)
+        #     self._pack_weights(self._weights[i], self._base_model)
+        #     predictions.append(self._base_model(X_D).numpy().flatten())
 
-        #         for sample, label in zip(noisy_features, labels):
-        #             x = self._base_model(sample, training=True)
-        #             gp = tfp.distributions.GaussianProcess(tfp.math.psd_kernels.ExponentiatedQuadratic(), index_points=[x])
-        #             log_likelihood = gp.log_prob(tf.cast(label, dtype=tf.float32))
+        # # get KL gradient
+        # variational_mean = tf.cast(tf.math.reduce_mean(predictions, axis=0), dtype=tf.float32)
+        # variational_cov = tf.cast(tfp.stats.covariance(predictions, sample_axis=0), dtype=tf.float32)
+        # prior_mean = tf.cast(function_prior.mean(), dtype=tf.float32)
+        # prior_cov = tf.cast(function_prior.covariance(), dtype=tf.float32)
 
-        #             if total_gradient is None:
-        #                 total_gradient = np.array([val.numpy().flatten()[0] for val in tape.gradient(log_likelihood, self._base_model.trainable_variables)])
-        #             else:
-        #                 total_gradient += np.array([val.numpy().flatten()[0] for val in tape.gradient(log_likelihood, self._base_model.trainable_variables)])
+        # print(variational_mean, prior_mean)
+        # print(variational_cov, prior_cov)
 
-        # total_gradient /= self._k
-        # total_gradient /= self._batch_size
+        # variational_gaussian = tfp.distributions.MultivariateNormalDiag(variational_mean, variational_cov)
+        # prior_gaussian = tfp.distributions.MultivariateNormalDiag(prior_mean, prior_cov[0])
 
-        # self._kl_estimate(X_M)
+        # print(variational_gaussian.event_shape)
+        # print(prior_gaussian.event_shape)
 
-    def _calculate_log_prob_weights(self, weights: tf.Tensor):
-        curr = 0
-        log_prob = 0
-        weights = tf.cast(weights, tf.float32)
-        for layer in self._prior.get_model_priors(self._base_model):
-            for vars in layer:
-                end = tf.math.reduce_prod(vars.batch_shape_tensor()) + curr
-                layer_weights = tf.reshape(weights[curr:end], vars.batch_shape)
-                log_prob += tf.reduce_sum(vars.log_prob(layer_weights))
+        # kl_divergence = tfp.distributions.kl_divergence(variational_gaussian, prior_gaussian)
+        # print(kl_divergence)
+        # with tf.GradientTape(persistent=True) as tape:
+        #     kl_divergence = tfp.distributions.kl_divergence(variational_gaussian, prior_gaussian)
 
-                curr = end
+        # dkl = tape.gradient(kl_divergence, self._base_model.trainable_variables)
 
-        return log_prob
+        # if not total_dkl:
+        #     total_dkl = dkl
+        # else:
+        #     total_dkl += dkl
+
+        
+        print(total_dll)
+        print(total_dkl * self._lambda)
             
 
     def _generate_measurement_set(self):
@@ -255,16 +179,13 @@ class FSVI(Optimizer):
         self._k = self._hyperparameters.k
         self._base_model = tf.keras.models.model_from_json(self._model_config)
         self._prior = kwargs["prior"]
+        self._lambda = self._hyperparameters._lambda
         self._init_weights()
 
         if kwargs["function_prior"] == "GP":
             training_data_np = np.asarray(list(self._training_dataset.map(lambda x, y: x)))
             dataset =tf.convert_to_tensor(training_data_np)
-            self._function_prior = tfp.distributions.GaussianProcess(tfp.math.psd_kernels.ExponentiatedQuadratic(), index_points=dataset)
-            pass
-        # elif kwargs["function_prior"] == "Normal":
-        #     self._function_prior = lambda y_pred: tfp.distributions.Normal(y_pred, 1)
-        # pass
+            self._function_prior = tfp.distributions.GaussianProcess(tfp.math.psd_kernels.ExponentiatedQuadratic())
 
     def update_parameters_step(self):
         pass
