@@ -115,6 +115,7 @@ class SVGD(Optimizer):
 
             gradients = self._svgd_gradients(i, flattened_dll, self.rbf_kernel)[i]
             self.optimizers[i].apply_gradients(zip(self.unflatten_gradients(gradients, self._base_model), self._base_model.trainable_variables))
+            # self.optimizers[i].apply_gradients(zip(dll, self._base_model.trainable_variables))
             updated_particles = self._unpack_weights()
             self._particles[i] = updated_particles
             
@@ -125,7 +126,7 @@ class SVGD(Optimizer):
             # visualize_data(samples, agg_preds)
             # plot_decision_boundary(samples, agg_preds)
             pass
-
+        
         return total_loss
 
     def _init_particles(self):
@@ -211,7 +212,7 @@ class SVGD(Optimizer):
         self._prior = kwargs["prior"]
         self._M = self._hyperparameters.M
         self._lr = self._hyperparameters.lr
-        self.optimizers = [tf.keras.optimizers.Adam(learning_rate=self._lr) for _ in range(self._M)]
+        self.optimizers = [tf.keras.optimizers.legacy.Adam(learning_rate=self._lr) for _ in range(self._M)]
         self._num_particles = self._get_number_of_trainable_parameters()
         self._init_particles()
 
