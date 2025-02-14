@@ -1,0 +1,52 @@
+
+Grid Search Results:
+lr=0.001, batch_size=32, M=3 => MSE: 145.6956412310619
+lr=0.001, batch_size=32, M=5 => MSE: 134.91516449345661
+lr=0.001, batch_size=32, M=10 => MSE: 129.27371310098425
+lr=0.001, batch_size=32, M=20 => MSE: 62.73249055192193
+lr=0.001, batch_size=64, M=3 => MSE: 109.45647621045526
+lr=0.001, batch_size=64, M=5 => MSE: 46.71973425194653
+lr=0.001, batch_size=64, M=10 => MSE: 64.76975576633929
+lr=0.001, batch_size=64, M=20 => MSE: 95.07607003336531
+lr=0.001, batch_size=128, M=3 => MSE: 3.4709646496912234
+lr=0.001, batch_size=128, M=5 => MSE: 201.435466998069
+lr=0.001, batch_size=128, M=10 => MSE: 99.39140608894166
+lr=0.001, batch_size=128, M=20 => MSE: 119.13060576849348
+lr=0.01, batch_size=32, M=3 => MSE: 0.0009899063664542426
+lr=0.01, batch_size=32, M=5 => MSE: 0.1348565822505899
+lr=0.01, batch_size=32, M=10 => MSE: 0.05777566547187197
+lr=0.01, batch_size=32, M=20 => MSE: 0.05289924534671583
+lr=0.01, batch_size=64, M=3 => MSE: 0.015474102026443805
+lr=0.01, batch_size=64, M=5 => MSE: 0.00797491818758725
+lr=0.01, batch_size=64, M=10 => MSE: 0.0020929619574129336
+lr=0.01, batch_size=64, M=20 => MSE: 0.0016969317097151675
+lr=0.01, batch_size=128, M=3 => MSE: 0.0878272423789805
+lr=0.01, batch_size=128, M=5 => MSE: 0.004363551950112528
+lr=0.01, batch_size=128, M=10 => MSE: 9.949730934901151e-06
+lr=0.01, batch_size=128, M=20 => MSE: 0.0018188331951628247
+lr=0.1, batch_size=32, M=3 => MSE: 5.2813361098398246e-08
+lr=0.1, batch_size=32, M=5 => MSE: 4.962190966342978e-10
+lr=0.1, batch_size=32, M=10 => MSE: 2.7274988184759392e-12
+lr=0.1, batch_size=32, M=20 => MSE: 9.898131263381802e-11
+lr=0.1, batch_size=64, M=3 => MSE: 5.469600091801094e-13
+lr=0.1, batch_size=64, M=5 => MSE: 4.614151561024036e-06
+lr=0.1, batch_size=64, M=10 => MSE: 4.9694411547109476e-11
+lr=0.1, batch_size=64, M=20 => MSE: 4.5946423145430946e-07
+lr=0.1, batch_size=128, M=3 => MSE: 1.1915222719872303e-11
+lr=0.1, batch_size=128, M=5 => MSE: 3.281108244445523e-11
+lr=0.1, batch_size=128, M=10 => MSE: 0.00014119919558913893
+lr=0.1, batch_size=128, M=20 => MSE: 2.267658819892057e-05
+lr=1.0, batch_size=32, M=3 => MSE: 6.468568008817978e-09
+lr=1.0, batch_size=32, M=5 => MSE: 11.166133263411922
+lr=1.0, batch_size=32, M=10 => MSE: 0.04287537009860284
+lr=1.0, batch_size=32, M=20 => MSE: 0.0035993974116771523
+lr=1.0, batch_size=64, M=3 => MSE: 1.6257217788497148e-12
+lr=1.0, batch_size=64, M=5 => MSE: 0.0003480419677105861
+lr=1.0, batch_size=64, M=10 => MSE: 0.0004138065378987611
+lr=1.0, batch_size=64, M=20 => MSE: 0.002513708201062459
+lr=1.0, batch_size=128, M=3 => MSE: 3.4542142236249154e-08
+lr=1.0, batch_size=128, M=5 => MSE: 0.0009538759202135724
+lr=1.0, batch_size=128, M=10 => MSE: 1.4050550847336486e-07
+lr=1.0, batch_size=128, M=20 => MSE: 9.733676577840221e-05
+
+Best hyperparameters: lr=0.1, batch_size=64, M=3 with MSE=5.469600091801094e-13

@@ -1,0 +1,30 @@
+Grid Search Results:
+epsilon=0.001, m=1.0, L=10 => MSE: 0.0111
+epsilon=0.001, m=1.0, L=30 => MSE: 29.4838
+epsilon=0.001, m=1.0, L=70 => MSE: 2.6128
+epsilon=0.001, m=0.5, L=10 => MSE: 0.0210
+epsilon=0.001, m=0.5, L=30 => MSE: 1.8385
+epsilon=0.001, m=0.5, L=70 => MSE: 647.2588
+epsilon=0.001, m=2.0, L=10 => MSE: 0.0535
+epsilon=0.001, m=2.0, L=30 => MSE: 0.2005
+epsilon=0.001, m=2.0, L=70 => MSE: 1.6130
+epsilon=0.0005, m=1.0, L=10 => MSE: 0.4494
+epsilon=0.0005, m=1.0, L=30 => MSE: 0.1270
+epsilon=0.0005, m=1.0, L=70 => MSE: 0.0007
+epsilon=0.0005, m=0.5, L=10 => MSE: 0.0043
+epsilon=0.0005, m=0.5, L=30 => MSE: 2.3821
+epsilon=0.0005, m=0.5, L=70 => MSE: 5.3410
+epsilon=0.0005, m=2.0, L=10 => MSE: 3.9955
+epsilon=0.0005, m=2.0, L=30 => MSE: 0.0110
+epsilon=0.0005, m=2.0, L=70 => MSE: 90.7605
+epsilon=0.0001, m=1.0, L=10 => MSE: 560.1252
+epsilon=0.0001, m=1.0, L=30 => MSE: 0.6163
+epsilon=0.0001, m=1.0, L=70 => MSE: 0.0181
+epsilon=0.0001, m=0.5, L=10 => MSE: 677.0839
+epsilon=0.0001, m=0.5, L=30 => MSE: 177.1831
+epsilon=0.0001, m=0.5, L=70 => MSE: 235.6001
+epsilon=0.0001, m=2.0, L=10 => MSE: 503.9818
+epsilon=0.0001, m=2.0, L=30 => MSE: 714.1489
+epsilon=0.0001, m=2.0, L=70 => MSE: 48.1217
+
+Best hyperparameters: epsilon=0.0005, m=1.0, L=70 with MSE: 0.0007

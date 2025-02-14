@@ -1,0 +1,39 @@
+Grid Search Results:
+lr=0.001, batch_size=1024, M=3 => Accuracy: 99.02%, Recall: 99.02%, Precision: 99.01%, F1: 0.9901
+lr=0.001, batch_size=1024, M=5 => Accuracy: 99.42%, Recall: 99.42%, Precision: 99.41%, F1: 0.9941
+lr=0.001, batch_size=1024, M=7 => Accuracy: 99.47%, Recall: 99.47%, Precision: 99.46%, F1: 0.9946
+lr=0.001, batch_size=512, M=3 => Accuracy: 99.22%, Recall: 99.22%, Precision: 99.23%, F1: 0.9922
+lr=0.001, batch_size=512, M=5 => Accuracy: 99.15%, Recall: 99.15%, Precision: 99.15%, F1: 0.9915
+lr=0.001, batch_size=512, M=7 => Accuracy: 99.40%, Recall: 99.40%, Precision: 99.40%, F1: 0.9940
+lr=0.001, batch_size=256, M=3 => Accuracy: 98.67%, Recall: 98.67%, Precision: 98.67%, F1: 0.9866
+lr=0.001, batch_size=256, M=5 => Accuracy: 99.00%, Recall: 99.00%, Precision: 99.00%, F1: 0.9899
+lr=0.001, batch_size=256, M=7 => Accuracy: 99.30%, Recall: 99.30%, Precision: 99.30%, F1: 0.9929
+lr=0.0005, batch_size=1024, M=3 => Accuracy: 98.70%, Recall: 98.70%, Precision: 98.69%, F1: 0.9870
+lr=0.0005, batch_size=1024, M=5 => Accuracy: 98.75%, Recall: 98.75%, Precision: 98.75%, F1: 0.9874
+lr=0.0005, batch_size=1024, M=7 => Accuracy: 99.30%, Recall: 99.30%, Precision: 99.29%, F1: 0.9928
+lr=0.0005, batch_size=512, M=3 => Accuracy: 98.38%, Recall: 98.38%, Precision: 98.38%, F1: 0.9837
+lr=0.0005, batch_size=512, M=5 => Accuracy: 98.87%, Recall: 98.87%, Precision: 98.86%, F1: 0.9887
+lr=0.0005, batch_size=512, M=7 => Accuracy: 98.80%, Recall: 98.80%, Precision: 98.80%, F1: 0.9879
+lr=0.0005, batch_size=256, M=3 => Accuracy: 97.70%, Recall: 97.70%, Precision: 97.67%, F1: 0.9768
+lr=0.0005, batch_size=256, M=5 => Accuracy: 98.22%, Recall: 98.22%, Precision: 98.20%, F1: 0.9820
+lr=0.0005, batch_size=256, M=7 => Accuracy: 98.73%, Recall: 98.73%, Precision: 98.71%, F1: 0.9872
+lr=0.01, batch_size=1024, M=3 => Accuracy: 99.48%, Recall: 99.48%, Precision: 99.48%, F1: 0.9948
+lr=0.01, batch_size=1024, M=5 => Accuracy: 99.60%, Recall: 99.60%, Precision: 99.60%, F1: 0.9960
+lr=0.01, batch_size=1024, M=7 => Accuracy: 99.70%, Recall: 99.70%, Precision: 99.70%, F1: 0.9969
+lr=0.01, batch_size=512, M=3 => Accuracy: 99.47%, Recall: 99.47%, Precision: 99.47%, F1: 0.9946
+lr=0.01, batch_size=512, M=5 => Accuracy: 99.53%, Recall: 99.53%, Precision: 99.53%, F1: 0.9953
+lr=0.01, batch_size=512, M=7 => Accuracy: 99.63%, Recall: 99.63%, Precision: 99.64%, F1: 0.9964
+lr=0.01, batch_size=256, M=3 => Accuracy: 99.52%, Recall: 99.52%, Precision: 99.51%, F1: 0.9951
+lr=0.01, batch_size=256, M=5 => Accuracy: 99.70%, Recall: 99.70%, Precision: 99.70%, F1: 0.9970
+lr=0.01, batch_size=256, M=7 => Accuracy: 99.50%, Recall: 99.50%, Precision: 99.49%, F1: 0.9949
+lr=0.1, batch_size=1024, M=3 => Accuracy: 30.67%, Recall: 30.67%, Precision: 81.06%, F1: 0.3012
+lr=0.1, batch_size=1024, M=5 => Accuracy: 31.28%, Recall: 31.28%, Precision: 85.93%, F1: 0.3353
+lr=0.1, batch_size=1024, M=7 => Accuracy: 32.63%, Recall: 32.63%, Precision: 81.11%, F1: 0.3355
+lr=0.1, batch_size=512, M=3 => Accuracy: 21.83%, Recall: 21.83%, Precision: 80.38%, F1: 0.2183
+lr=0.1, batch_size=512, M=5 => Accuracy: 24.60%, Recall: 24.60%, Precision: 80.90%, F1: 0.2445
+lr=0.1, batch_size=512, M=7 => Accuracy: 32.97%, Recall: 32.97%, Precision: 87.73%, F1: 0.3356
+lr=0.1, batch_size=256, M=3 => Accuracy: 16.55%, Recall: 16.55%, Precision: 83.69%, F1: 0.1408
+lr=0.1, batch_size=256, M=5 => Accuracy: 27.53%, Recall: 27.53%, Precision: 90.11%, F1: 0.2762
+lr=0.1, batch_size=256, M=7 => Accuracy: 28.48%, Recall: 28.48%, Precision: 81.17%, F1: 0.2834
+
+Best hyperparameters: lr=0.01, batch_size=1024, M=7 with Accuracy: 99.70%

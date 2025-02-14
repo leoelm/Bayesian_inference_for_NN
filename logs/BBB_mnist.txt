@@ -1,0 +1,15 @@
+Grid Search Results:
+lr=0.0001, alpha=0.0, batch_size=1000, hidden_dims=128 => Accuracy: 10.40%
+lr=0.0001, alpha=0.0, batch_size=1000, hidden_dims=256 => Accuracy: 18.28%
+lr=0.0001, alpha=0.3, batch_size=1000, hidden_dims=128 => Accuracy: 11.30%
+lr=0.0001, alpha=0.3, batch_size=1000, hidden_dims=256 => Accuracy: 10.65%
+lr=0.0005, alpha=0.0, batch_size=1000, hidden_dims=128 => Accuracy: 10.07%
+lr=0.0005, alpha=0.0, batch_size=1000, hidden_dims=256 => Accuracy: 24.68%
+lr=0.0005, alpha=0.3, batch_size=1000, hidden_dims=128 => Accuracy: 10.05%
+lr=0.0005, alpha=0.3, batch_size=1000, hidden_dims=256 => Accuracy: 28.73%
+lr=0.001, alpha=0.0, batch_size=1000, hidden_dims=128 => Accuracy: 13.23%
+lr=0.001, alpha=0.0, batch_size=1000, hidden_dims=256 => Accuracy: 25.63%
+lr=0.001, alpha=0.3, batch_size=1000, hidden_dims=128 => Accuracy: 8.60%
+lr=0.001, alpha=0.3, batch_size=1000, hidden_dims=256 => Accuracy: 28.30%
+
+Best hyperparameters: lr=0.0005, alpha=0.3, batch_size=1000, hidden_dims=256 with Accuracy: 28.73%

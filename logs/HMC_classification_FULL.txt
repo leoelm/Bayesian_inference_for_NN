@@ -1,0 +1,30 @@
+Grid Search Results:
+epsilon=0.01, m=1.0, L=10 => Accuracy: 90.50%
+epsilon=0.01, m=1.0, L=30 => Accuracy: 95.50%
+epsilon=0.01, m=1.0, L=70 => Accuracy: 95.50%
+epsilon=0.01, m=0.5, L=10 => Accuracy: 93.00%
+epsilon=0.01, m=0.5, L=30 => Accuracy: 96.50%
+epsilon=0.01, m=0.5, L=70 => Accuracy: 97.50%
+epsilon=0.01, m=2.0, L=10 => Accuracy: 87.50%
+epsilon=0.01, m=2.0, L=30 => Accuracy: 96.50%
+epsilon=0.01, m=2.0, L=70 => Accuracy: 97.50%
+epsilon=0.005, m=1.0, L=10 => Accuracy: 87.50%
+epsilon=0.005, m=1.0, L=30 => Accuracy: 96.50%
+epsilon=0.005, m=1.0, L=70 => Accuracy: 95.00%
+epsilon=0.005, m=0.5, L=10 => Accuracy: 88.00%
+epsilon=0.005, m=0.5, L=30 => Accuracy: 98.00%
+epsilon=0.005, m=0.5, L=70 => Accuracy: 96.00%
+epsilon=0.005, m=2.0, L=10 => Accuracy: 85.50%
+epsilon=0.005, m=2.0, L=30 => Accuracy: 92.50%
+epsilon=0.005, m=2.0, L=70 => Accuracy: 97.50%
+epsilon=0.001, m=1.0, L=10 => Accuracy: 75.50%
+epsilon=0.001, m=1.0, L=30 => Accuracy: 77.50%
+epsilon=0.001, m=1.0, L=70 => Accuracy: 89.00%
+epsilon=0.001, m=0.5, L=10 => Accuracy: 82.00%
+epsilon=0.001, m=0.5, L=30 => Accuracy: 81.00%
+epsilon=0.001, m=0.5, L=70 => Accuracy: 87.50%
+epsilon=0.001, m=2.0, L=10 => Accuracy: 52.50%
+epsilon=0.001, m=2.0, L=30 => Accuracy: 78.50%
+epsilon=0.001, m=2.0, L=70 => Accuracy: 91.50%
+
+Best hyperparameters: epsilon=0.005, m=0.5, L=30 with Accuracy: 98.00%
