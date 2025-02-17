@@ -7,7 +7,7 @@ from . import HyperParameters
 import numpy as np
 import matplotlib.pyplot as plt
 import wandb
-from wandb.keras import WandbCallback
+from wandb.integration.keras import WandbCallback
 
 
 class WandbHyperparametersOptimizer:

@@ -72,6 +72,8 @@ class Plotter:
         uncertainty_area = tf.cast(predictions_max < uncertainty_threshold, dtype=tf.float32)
         uncertainty_area = tf.reshape(uncertainty_area, (dim1.shape[0], dim1.shape[1]))
         plt.contourf(dim1, dim2, uncertainty_area, [0.9, 1.1], colors=["orange"], alpha=0.5)
+        plt.xlabel("Feature 1")
+        plt.ylabel("Feature 2")
         plt.legend()
         plt.title("Uncertainty area with threshold " + str(uncertainty_threshold))
 
@@ -86,7 +88,6 @@ class Plotter:
 
     def _extract_x_y_from_dataset(self, dimension=2, n_samples=100, data_type="test") -> (tf.Tensor, tf.Tensor):
         x, y = self._get_x_y(n_samples, data_type)
-
         if x.shape[1] > dimension:
             print("Dimension ", len(x.shape[1]), " is not right.")
             print("Will apply PCA to reduce to dimension ", dimension)
@@ -106,12 +107,15 @@ class Plotter:
                                    un_zoom_level=0.2):
         dim1, dim2, grid_x_augmented = self._extract_grid_x(x, base_matrix, granularity, un_zoom_level)
         prediction_samples, _ = self._model.predict(grid_x_augmented, n_boundaries)
+        plt.figure(figsize=(8, 6))
         plt.scatter(x[y == 0][:, 0], x[y == 0][:, 1], marker='o', c="blue", label="Class 0")
         plt.scatter(x[y == 1][:, 0], x[y == 1][:, 1], marker='x', c="red", label="Class 1")
         for pred in prediction_samples:
             pred = tf.reshape(pred[:, 0], dim1.shape)
             plt.contour(dim1, dim2, pred, [0.5], colors=["red"])
         plt.legend()
+        plt.xlabel("Feature 1")
+        plt.ylabel("Feature 2")
         plt.title("Multiple Decision Boundaries N=" + str(n_boundaries))
 
     def _extract_grid_x(self, x, base_matrix, granularity, un_zoom_level: float):

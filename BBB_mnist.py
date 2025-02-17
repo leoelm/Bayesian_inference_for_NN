@@ -102,14 +102,14 @@ if __name__ == "__main__":
     # alpha_values = [0.0]
     # batch_size_values = [500]
     # hidden_dims_values = [128]  # Try different hidden layer sizes.
-    lr_values = [0.0001, 0.0005, 0.001]
-    alpha_values = [0.0, 0.3]
+    lr_values = [0.0001, 0.01]
+    alpha_values = [0.0]
     batch_size_values = [1000]
     hidden_dims_values = [128, 256]  # Try different hidden layer sizes.
     
     # Run grid search (using 10000 training steps).
     best_params, best_acc, results, best_model = grid_search(
-        lr_values, alpha_values, batch_size_values, hidden_dims_values, train_steps=10000
+        lr_values, alpha_values, batch_size_values, hidden_dims_values, train_steps=15000
     )
     
     # Write grid search results to a log file.

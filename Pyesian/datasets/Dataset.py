@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import os
 from PIL import Image
+from ucimlrepo import fetch_ucirepo 
 
 
 class Dataset:
@@ -74,6 +75,8 @@ class Dataset:
             input, label = self._load_images_and_csv(dataset)
             dataset = tf.data.Dataset.from_tensor_slices((input, label))
             self._init_from_tf_dataset(dataset)
+        elif (isinstance(dataset, int)):
+            self._init_from_uci(dataset)
         else:
             raise ValueError("Unsupported dataset format")
         self.train_data = self.train_data.cache()
@@ -128,6 +131,14 @@ class Dataset:
     def _init_from_csv(self, filename: str):
         dataframe = pd.read_csv(filename)
         return self._init_from_dataframe(dataframe)
+    
+    def _init_from_uci(self, id: int):
+        dataframe = fetch_ucirepo(id=id)
+        features = dataframe.data.features
+        targets = dataframe.data.targets
+        dataset = tf.data.Dataset.from_tensor_slices((features, targets))
+        self._init_from_tf_dataset(dataset)
+        return targets
 
     def training_dataset(self) -> tf.data.Dataset:
         """

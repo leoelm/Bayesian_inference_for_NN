@@ -37,11 +37,14 @@ class BBB(Optimizer):
         self._posterior_mean_list = []
         self._posterior_std_dev_list = []
         self._priors_list = []
-        self._layers_intervals = []
+        self._layers_intervals = [] # saves interval of (n, n) for each layer n that has trainable parameters
         self._prior2: GaussianPrior = None
         self._prior1: GaussianPrior = None
         self._prior: GaussianPrior = None
         self._step = 0
+
+        self.val_losses  = []
+        self.train_losses = []
 
 
 
@@ -125,27 +128,29 @@ class BBB(Optimizer):
     def step(self, save_document_path = None):
         self._step += 1
         #update the weights
-        noises = self._update_weights()
+        noises = self._update_weights() # get normal distributions as individual noise for each weight
 
         # get sample and label
-        sample,label = next(self._data_iterator, (None,None))
+        sample,label = next(self._data_iterator, (None,None)) # move iterator forward, defaults to (None, None) if iterator at end
         # if the iterator reaches the end of the dataset, reinitialise the iterator
         if sample is None:
             self._data_iterator = iter(self._dataloader)
             sample, label = next(self._data_iterator, (None, None))
 
-        with tf.GradientTape(persistent=True) as tape:
+        with tf.GradientTape(persistent=True) as tape: # TODO: figure out what this does
             # take the posterior distribution into account in the calculation of the gradients
             tape.watch(self._posterior_mean_list)
             tape.watch(self._posterior_std_dev_list)
-            predictions = self._base_model(sample, training = True)
+            predictions = self._base_model(sample, training = True) # get prediction for sample
+
+            # step 4
             likelihood = self._cost_function(
                 label, 
                 predictions
-            )
+            ) # calculate cost (i.e. datalikelihood + weighted KL divergence)
         # get the weight, mean and standard deviation gradients
-        mean_gradients = tape.gradient(likelihood, self._posterior_mean_list)
-        std_dev_gradients = tape.gradient(likelihood, self._posterior_std_dev_list)
+        mean_gradients = tape.gradient(likelihood, self._posterior_mean_list) # get gradient for mean of each weight TODO: make sure this is right
+        std_dev_gradients = tape.gradient(likelihood, self._posterior_std_dev_list) # get gradient for std of each weight TODO: make sure this is right
 
         # save the model loss if the path is specified
         if save_document_path != None:
@@ -156,21 +161,24 @@ class BBB(Optimizer):
         new_posterior_std_dev_list = []
         trainable_layer_index = 0
         gradient_layer_index = 0
-        for layer_idx in range(len(self._base_model.layers)):
-            layer = self._base_model.layers[layer_idx]
-            if len(layer.trainable_variables) != 0:
+        for layer_idx in range(len(self._base_model.layers)): # for each layer in model
+            layer = self._base_model.layers[layer_idx] # get layer
+            if len(layer.trainable_variables) != 0: # if layer has trainable variables
                 # go through weights and biases and merge their gradients into one vector
                 _new_mean_layer_weights = []
                 _new_std_dev_layer_weights = []
 
-                for i in range(len(layer.trainable_variables)):
+                for i in range(len(layer.trainable_variables)): # for each trainable value
                     # calculate the new mean of the posterior
-                    weight_gradients = tape.gradient(likelihood, layer.trainable_variables[i])
+                    weight_gradients = tape.gradient(likelihood, layer.trainable_variables[i]) # how is this different to line 147??? I think layer.trainable_variables is a distribution and not just a mean
 
-                    mean_gradient = mean_gradients[trainable_layer_index][i]+weight_gradients
+                    # step 5
+                    mean_gradient = mean_gradients[trainable_layer_index][i]+weight_gradients # TODO: check what this does
                     _new_mean_layer_weights.append(
                         self._posterior_mean_list[trainable_layer_index][i]-self._lr*mean_gradient
                     )
+
+                    # step 6
                     # calculate the std_dev gradient
                     posterior_std_dev = self._posterior_std_dev_list[trainable_layer_index][i]
                     noise = noises[gradient_layer_index]
@@ -183,79 +191,94 @@ class BBB(Optimizer):
                     )
                     gradient_layer_index += 1
                 trainable_layer_index += 1
+
+                # step 7
                 new_posterior_mean_list.append(_new_mean_layer_weights)
                 new_posterior_std_dev_list.append(_new_std_dev_layer_weights)
 
         #update the posteriors
         self._posterior_mean_list = new_posterior_mean_list
         self._posterior_std_dev_list = new_posterior_std_dev_list
+
+        if self._step % 10:
+            validation_iterator = iter((self._dataset.valid_data.batch(self._dataset.valid_size)))
+            for val_samples, val_labels in validation_iterator:
+                val_preds = self._base_model(val_samples)
+                self.val_losses.append(self._dataset.loss()(val_labels, val_preds))
+
+            self.train_losses.append(likelihood)
+
         return likelihood
 
 
 
 
 
-
+    # perturb obtained posteriors by some noise and then assign to model parameters
     def _update_weights(self):
         """
         generate new weights following the posterior distributions
         """
         noises = []
-        for interval_idx in range(len(self._layers_intervals)):
+        for interval_idx in range(len(self._layers_intervals)): # for each layer interval, i.e. for each layer with trainable params
             # reshape the vector and update the base model
-            start = self._layers_intervals[interval_idx][0]
-            end = self._layers_intervals[interval_idx][1]
-            for layer_idx in range(start, end + 1):
+            start = self._layers_intervals[interval_idx][0] # layer index
+            end = self._layers_intervals[interval_idx][1] # layer index
+            for layer_idx in range(start, end + 1): # since start == end, layer_idx does one iteratiokn with value of start (i.e. layer index)
                 # go through weights and biases of the layer
-                for i in range(len(self._base_model.layers[layer_idx].trainable_variables)):
+                for i in range(len(self._base_model.layers[layer_idx].trainable_variables)): # for each trainable param in layer
                     #sample the new wights as a vector
-                    w = self._base_model.layers[layer_idx].trainable_variables[i]
+                    w = self._base_model.layers[layer_idx].trainable_variables[i] # get specific trainable weight
+
+                    # step 1 in optimisation procedure
                     noise = tfp.distributions.Normal(
                         tf.zeros(self._posterior_mean_list[interval_idx][i].shape),
                         tf.ones(self._posterior_std_dev_list[interval_idx][i].shape)
-                    ).sample()
+                    ).sample() # gets noise value from distribution # TODO: check how this works, what it initialises to 
                     noises.append(noise)
-                    vector_weights = noise * tf.math.softplus(self._posterior_std_dev_list[interval_idx][i])
-                    vector_weights += self._posterior_mean_list[interval_idx][i]
+
+                    # step 2
+                    vector_weights = noise * tf.math.softplus(self._posterior_std_dev_list[interval_idx][i]) #TODO: what does softplus do, but seems the new weight is just spread by std
+                    vector_weights += self._posterior_mean_list[interval_idx][i] # shift noise by mean
 
                     new_weights = tf.reshape(vector_weights, w.shape)
-                    self._base_model.layers[layer_idx].trainable_variables[i].assign(new_weights)
+                    self._base_model.layers[layer_idx].trainable_variables[i].assign(new_weights) # set posterior of model to updated posterior distribution
         return noises
 
 
 
-    def compile_extra_components(self, **kwargs):
+    def compile_extra_components(self, **kwargs): # called when compiling optimizer; kind of an init function
         """
             Args:
                 prior (GaussianPrior): the prior
                 prior2 (GuassianPrior): second prior used to create a mixture prior weighted with hyperparameter pi
         """
-        self._base_model = tf.keras.models.model_from_json(self._model_config)
-        self._prior = kwargs["prior"]
+        self._base_model = tf.keras.models.model_from_json(self._model_config) # load model from model config
+        self._prior = kwargs["prior"] # taken from input args to optimizer.compile
         if "prior2" in kwargs:
             self._prior2 = kwargs["prior2"]
         else:  
-            self._prior2 = GaussianPrior(0.0,0.0)
-        self._lr = self._hyperparameters.lr
-        self._pi = getattr(self._hyperparameters, 'pi', None) if hasattr(self._hyperparameters, 'pi') else 1
+            self._prior2 = GaussianPrior(0.0,0.0) # use this in test.py currently
+        self._lr = self._hyperparameters.lr 
+        self._pi = getattr(self._hyperparameters, 'pi', None) if hasattr(self._hyperparameters, 'pi') else 1 # weighting of prior one when combining prior 1 and 2 below
         self._batch_size = int(self._hyperparameters.batch_size)
-        if isinstance(self._prior._mean, int) or isinstance(self._prior._mean, float):
+        if isinstance(self._prior._mean, int) or isinstance(self._prior._mean, float): # not quite sure in what scenario the prior mean wouldnt be int or float
             sign = self._prior._std_dev/abs(self._prior._std_dev)
-            self._prior = GaussianPrior(
+            self._prior = GaussianPrior( # summing prior 1 and prior 2 weighted according to pi
                 self._prior._mean * self._pi + self._prior2._mean * (1 - self._pi),
                 sign * math.sqrt((self._prior._std_dev * self._pi)**2 + (self._prior2._std_dev * (1 - self._pi))**2),
             )
 
         self._alpha = self._hyperparameters.alpha
-        self._dataset_setup()
-        self._priors_list = self._prior.get_model_priors(self._base_model)
-        self._init_BBB_arrays()
+        self._dataset_setup() # loads training data and sets self._data_iterator to iterator for training data
+        self._priors_list = self._prior.get_model_priors(self._base_model) # creates a prior for each trainable parameter of model
+        self._init_BBB_arrays() # inits arrays required for BBB; TODO: match this to part of research paper
 
     def _init_BBB_arrays(self):
         """
         initialises the posterior list, the correlated layers intervals and the trainable layer indices
         """
-        trainable_layer_index = 0
+        trainable_layer_index = 0 # == layer_idx
         for layer_idx in range(len(self._base_model.layers)):
             layer = self._base_model.layers[layer_idx]
             # iterate through weights and biases of the layer
@@ -263,13 +286,13 @@ class BBB(Optimizer):
             std_dev_layer_posteriors = []
 
             if len(layer.trainable_variables) != 0:
-                for i in range(len(layer.trainable_variables)):
-                    mean_layer_posteriors.append(self._priors_list[trainable_layer_index][i].mean())
-                    std_dev_layer_posteriors.append(self._priors_list[trainable_layer_index][i].stddev())
-                self._weight_layers_indices.append(layer_idx)
-                self._layers_intervals.append([layer_idx, layer_idx])
-                self._posterior_mean_list.append(mean_layer_posteriors)
-                self._posterior_std_dev_list.append(std_dev_layer_posteriors)
+                for i in range(len(layer.trainable_variables)): # for each trainable variable of layer
+                    mean_layer_posteriors.append(self._priors_list[trainable_layer_index][i].mean()) # get mean of prior
+                    std_dev_layer_posteriors.append(self._priors_list[trainable_layer_index][i].stddev()) # get stddev of prior
+                self._weight_layers_indices.append(layer_idx) # indicate that a layer has trainable parameters
+                self._layers_intervals.append([layer_idx, layer_idx]) # not quite certain what this does
+                self._posterior_mean_list.append(mean_layer_posteriors) # init posterior means to prior means
+                self._posterior_std_dev_list.append(std_dev_layer_posteriors) # init posterior stds to prior stds
             trainable_layer_index += 1
 
 
@@ -297,7 +320,7 @@ class BBB(Optimizer):
             if idx + 1 < len(self._weight_layers_indices):
                 end_idx = self._weight_layers_indices[idx + 1]
             model.apply_distribution(tf_dist, start_idx, start_idx)
-        return model
+        return model, self.train_losses, self.val_losses
 
     def update_parameters_step(self):
         pass

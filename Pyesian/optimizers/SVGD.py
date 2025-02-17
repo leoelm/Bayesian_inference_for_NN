@@ -48,6 +48,8 @@ class SVGD(Optimizer):
         self._step = 0
         self._M = None
         self._particles = None
+        self.train_losses = []
+        self.valid_losses = []
     
     def _svgd_gradients(self, particle_idx, log_prob_gradients, kernel):
         tensor_particles = tf.convert_to_tensor(self._particles)
@@ -93,6 +95,7 @@ class SVGD(Optimizer):
         labels = tf.cast(labels, tf.float32)
 
         total_loss = 0
+        total_val_loss = 0
         agg_preds = None
         for i in range(self._M):
             particles = tf.cast(tf.convert_to_tensor(self._particles[i]), dtype=tf.float32)
@@ -120,13 +123,21 @@ class SVGD(Optimizer):
             self._particles[i] = updated_particles
             
             total_loss += log_likelihood / self._M
-        
+            validation_iterator = iter((self._dataset.valid_data.batch(self._dataset.valid_size)))
+            for val_samples, val_labels in validation_iterator:
+                val_preds = self._base_model(val_samples)
+                total_val_loss += self._dataset.loss()(val_labels, val_preds) /self._M
+
         if self._step % 100 == 0:
             agg_preds /= self._M
             # visualize_data(samples, agg_preds)
             # plot_decision_boundary(samples, agg_preds)
             pass
         
+        if self._step % 10 == 0:
+            self.train_losses.append(total_loss)
+            self.valid_losses.append(total_val_loss)
+
         return total_loss
 
     def _init_particles(self):
@@ -235,6 +246,6 @@ class SVGD(Optimizer):
         for i in range(self._M):
             model = ensemble[i]
             self._pack_weights(self._particles[i], model)
-        return ensemble
+        return ensemble, self.train_losses, self.valid_losses
 
         

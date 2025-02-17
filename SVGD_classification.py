@@ -5,57 +5,19 @@ from Pyesian.distributions import GaussianPrior
 from Pyesian.optimizers import SVGD
 from Pyesian.optimizers.hyperparameters import HyperParameters
 import numpy as np
-from sklearn.metrics import accuracy_score, recall_score, precision_score
+from sklearn.metrics import (
+    accuracy_score, 
+    recall_score, 
+    precision_score, 
+    roc_auc_score,
+    f1_score,
+    confusion_matrix,
+    brier_score_loss
+)
 import matplotlib.pyplot as plt
-from itertools import product
 
-def plot_decision_boundary_with_uncertainty(
-    X, y, model_fn, resolution=200, lower_thresh=0.1, upper_thresh=0.9
-):
-    """
-    Plots:
-      1) A scatter plot of (X, y).
-      2) The decision boundary p=0.5 as a contour line.
-      3) An 'uncertainty region' where lower_thresh < p < upper_thresh is filled.
-    """
-    # 1) Create a grid that spans the data range
-    x_min, x_max = X[:, 0].min() - 0.5, X[:, 0].max() + 0.5
-    y_min, y_max = X[:, 1].min() - 0.5, X[:, 1].max() + 0.5
-    xx, yy = np.meshgrid(
-        np.linspace(x_min, x_max, resolution),
-        np.linspace(y_min, y_max, resolution)
-    )
-    # Flatten the grid for prediction
-    grid_points = np.c_[xx.ravel(), yy.ravel()]
-
-    # 2) Predict probabilities on the grid.
-    # model_fn should return probabilities in [0, 1].
-    probs = model_fn(grid_points)
-    # Reshape predictions to match the grid (assumes shape (M, 1))
-    probs = tf.reshape(probs[:, 0], xx.shape)
-
-    # 3) Plot the data.
-    plt.figure(figsize=(8, 6))
-    scatter = plt.scatter(
-        X[:, 0], X[:, 1], c=y, cmap=plt.cm.coolwarm, edgecolors='k'
-    )
-    plt.colorbar(scatter, label="Class Label")
-    plt.xlabel("Feature 1")
-    plt.ylabel("Feature 2")
-    plt.title(f"Uncertainty area with threshold={upper_thresh}")
-
-    # 4) Plot the decision boundary at p=0.5.
-    plt.contour(xx, yy, probs, levels=[0.5], colors='red', alpha=0.8)
-
-    # 5) Highlight the uncertainty region: lower_thresh < p < upper_thresh.
-    uncertainty_mask = (probs > lower_thresh) & (probs < upper_thresh)
-    uncertainty_mask = uncertainty_mask.numpy().astype(float)
-    plt.contourf(xx, yy, uncertainty_mask, 
-                 levels=[0, 0.5, 1],
-                 colors=["none", "orange"],
-                 alpha=0.3)
-    plt.show()
-
+import numpy as np
+import matplotlib.pyplot as plt
 
 def plot_decision_boundary(y, X, prediction_samples, resolution=200):
     """
@@ -74,141 +36,154 @@ def plot_decision_boundary(y, X, prediction_samples, resolution=200):
 
     # 2) Create the plot and scatter the original data
     plt.figure(figsize=(8, 6))
-    scatter = plt.scatter(
-        X[:, 0], X[:, 1],
-        c=y, cmap=plt.cm.coolwarm, edgecolors='k'
-    )
+    plt.scatter(X[y == 0][:, 0], X[y == 0][:, 1], marker='o', c="blue", label="Class 0")
+    plt.scatter(X[y == 1][:, 0], X[y == 1][:, 1], marker='x', c="red", label="Class 1")
+    
     plt.xlabel("Feature 1")
     plt.ylabel("Feature 2")
     plt.title(f"Multiple Decision Boundaries N={len(prediction_samples)}")
-    plt.colorbar(scatter, label="Class Label")
 
     # 3) For each sample, predict and plot its decision boundary.
     for sample_idx, model_fn in enumerate(prediction_samples, start=1):
         preds = model_fn(grid_points)  # (resolution*resolution, ?)
         Z = tf.reshape(preds[:, 0], xx.shape)
         cs = plt.contour(xx, yy, Z, levels=[0.5], alpha=0.8, colors='r')
-        if sample_idx == 1:
-            cs.collections[0].set_label("Decision Boundary")
     plt.legend(loc="best")
     plt.show()
 
 
-def run_experiment(lr, batch_size, M, x, y, train_steps=100):
+def compute_ood_auroc(models, id_data, ood_data):
     """
-    Builds and trains a classification model with given hyperparameters using SVGD,
-    then returns evaluation metrics (accuracy, recall, precision) on the test set.
+    Compute AUROC for Out-of-Distribution (OOD) detection using softmax scores.
     """
-    # Wrap the data in the Dataset class for classification.
-    dataset = Dataset(
-        tf.data.Dataset.from_tensor_slices((x, y)),
-        tf.keras.losses.SparseCategoricalCrossentropy,
-        "Classification"
-    )
-    
-    # Build a new tf.keras model.
-    model = tf.keras.models.Sequential()
-    model.add(tf.keras.layers.Dense(64, activation='relu', input_shape=(2,)))
-    model.add(tf.keras.layers.Dense(2, activation='softmax'))
-    
-    # Create the prior distribution.
-    prior = GaussianPrior(0, 1)
-    # Set the SVGD hyperparameters.
-    hyperparams = HyperParameters(lr=lr, batch_size=batch_size, M=M)
-    # Instantiate, compile, and train the SVGD optimizer.
-    optimizer = SVGD()
-    optimizer.compile(hyperparams, model.to_json(), dataset, prior=prior)
-    optimizer.train(train_steps)
-    models = optimizer.result()
+    # Get softmax scores for ID data
+    id_preds = np.zeros((len(id_data), 2))
+    for model in models:
+        id_preds += model.predict(id_data)
+    id_preds /= len(models)
+    id_scores = np.max(id_preds, axis=1)  # Max softmax probability
 
-    # Evaluate the ensemble on the test set.
-    test_samples = dataset.test_size
-    agg_preds = np.zeros((test_samples, 2))
-    x_test, y_true = next(iter(dataset.test_data.batch(test_samples)))
-    for m in models:
-        preds = m.predict(x_test)
-        agg_preds += preds
-    agg_preds /= len(models)
-    agg_preds = np.argmax(agg_preds, axis=1)
-    
-    acc = accuracy_score(y_true, agg_preds)
-    rec = recall_score(y_true, agg_preds)
-    prec = precision_score(y_true, agg_preds)
-    return acc, rec, prec
+    # Get softmax scores for OOD data
+    ood_preds = np.zeros((len(ood_data), 2))
+    for model in models:
+        ood_preds += model.predict(ood_data)
+    ood_preds /= len(models)
+    ood_scores = np.max(ood_preds, axis=1)
 
+    # Create labels: ID -> 1, OOD -> 0
+    labels = np.concatenate([np.ones_like(id_scores), np.zeros_like(ood_scores)])
+    scores = np.concatenate([id_scores, ood_scores])
 
-def grid_search(x, y, lr_values, batch_size_values, M_values, train_steps=100):
+    # Compute AUROC
+    auroc = roc_auc_score(labels, scores)
+    print(f"OOD AUROC: {auroc:.4f}")
+    return auroc
+
+def compute_classification_metrics(models, x, y):
     """
-    Performs grid search over the provided hyperparameter ranges.
-    Returns the best hyperparameters (with highest accuracy) along with all results.
+    Compute several classification metrics on in-distribution data.
     """
-    best_acc = 0.0
-    best_params = None
-    results = []
+    # Ensemble predictions (averaging the softmax outputs)
+    ensemble_preds = np.zeros((len(x), 2))
+    print(models)
+    for model in models:
+        ensemble_preds += model.predict(x)
+    ensemble_preds /= len(models)
     
-    for lr, bs, M in product(lr_values, batch_size_values, M_values):
-        print(f"Testing: lr={lr}, batch_size={bs}, M={M}")
-        acc, rec, prec = run_experiment(lr, bs, M, x, y, train_steps=train_steps)
-        results.append((lr, bs, M, acc, rec, prec))
-        print(f"--> Accuracy: {acc:.4f}, Recall: {rec:.4f}, Precision: {prec:.4f}\n")
-        if acc > best_acc:
-            best_acc = acc
-            best_params = (lr, bs, M)
+    # Predicted labels
+    predicted_labels = np.argmax(ensemble_preds, axis=1)
     
-    return best_params, best_acc, results
-
+    # Compute metrics
+    acc = accuracy_score(y, predicted_labels)
+    prec = precision_score(y, predicted_labels, average='binary')
+    rec = recall_score(y, predicted_labels, average='binary')
+    f1 = f1_score(y, predicted_labels, average='binary')
+    
+    # For ROC AUC and Brier score, use the probability of the positive class (assumed to be index 1)
+    auc = roc_auc_score(y, ensemble_preds[:, 1])
+    brier = brier_score_loss(y, ensemble_preds[:, 1])
+    
+    cm = confusion_matrix(y, predicted_labels)
+    
+    print("\nIn-Distribution Classification Metrics:")
+    print(f"Accuracy:    {acc:.4f}")
+    print(f"Precision:   {prec:.4f}")
+    print(f"Recall:      {rec:.4f}")
+    print(f"F1 Score:    {f1:.4f}")
+    print(f"ROC AUC:     {auc:.4f}")
+    print(f"Brier Score: {brier:.4f}")
+    print("Confusion Matrix:")
+    print(cm)
+    
+    return {
+        "accuracy": acc,
+        "precision": prec,
+        "recall": rec,
+        "f1_score": f1,
+        "roc_auc": auc,
+        "brier_score": brier,
+        "confusion_matrix": cm  # This is a 2D array; you can aggregate it separately if desired.
+    }
 
 if __name__ == "__main__":
-    # Load a classification dataset from sklearn (e.g., moons with noise).
-    x, y = sklearn.datasets.make_moons(n_samples=2000, noise=0.2)
+    # Generate in-distribution data once
+    x_id, y_id = sklearn.datasets.make_moons(n_samples=2000, noise=0.2, random_state=42)
     
-    # Define ranges for grid search.
-    lr_values = [0.001, 0.01, 0.1, 1.0]
-    batch_size_values = [32, 64, 128]
-    M_values = [3, 5, 10, 20]
+    # Generate OOD data once (set seed for reproducibility)
+    np.random.seed(42)
+    x_ood = np.random.uniform(low=-2, high=3, size=(1000, 2))
     
-    # Run grid search (using a relatively short training for demonstration).
-    best_params, best_acc, results = grid_search(x, y, lr_values, batch_size_values, M_values, train_steps=800)
+    # Lists to store metrics for each run
+    metrics_list = []
+    ood_aurocs = []
     
-    with open('logs/SVGD_classification.txt', 'w') as f:
-        print("Grid Search Results:", file=f)
-        for r in results:
-            print(f"lr={r[0]}, batch_size={r[1]}, M={r[2]} => Accuracy: {r[3]:.4f}, Recall: {r[4]:.4f}, Precision: {r[5]:.4f}", file=f)
+    runs = 1
+    for run in range(runs):
+        print(f"\n{'='*20} Run {run+1}/{runs} {'='*20}")
         
-        print(f"\nBest hyperparameters: lr={best_params[0]}, batch_size={best_params[1]}, M={best_params[2]} with Accuracy={best_acc:.4f}", file=f)
-    
-    # (Optional) Train a final model using the best hyperparameters.
-    if False:
+        # Prepare the dataset for training
         dataset = Dataset(
-            tf.data.Dataset.from_tensor_slices((x, y)),
+            tf.data.Dataset.from_tensor_slices((x_id, y_id)),
             tf.keras.losses.SparseCategoricalCrossentropy,
             "Classification"
         )
         
-        model = tf.keras.models.Sequential()
-        model.add(tf.keras.layers.Dense(64, activation='relu', input_shape=(2,)))
-        model.add(tf.keras.layers.Dense(2, activation='softmax'))
+        # Define a new model for this run
+        model = tf.keras.models.Sequential([
+            tf.keras.layers.Dense(64, activation='relu', input_shape=(2,)),
+            tf.keras.layers.Dense(2, activation='softmax')
+        ])
         
+        # Set up the optimizer and prior
         prior = GaussianPrior(0, 1)
-        hyperparams = HyperParameters(lr=best_params[0], batch_size=best_params[1], M=best_params[2])
+        lr, batch_size, M, train_steps = 0.001, 64, 10, 1000
+        hyperparams = HyperParameters(lr=lr, batch_size=batch_size, M=M)
         optimizer = SVGD()
         optimizer.compile(hyperparams, model.to_json(), dataset, prior=prior)
-        optimizer.train(100)
-        models = optimizer.result()
         
-        test_samples = dataset.test_size
-        agg_preds = np.zeros((test_samples, 2))
-        x_test, y_true = next(iter(dataset.test_data.batch(test_samples)))
-        for m in models:
-            preds = m.predict(x_test)
-            agg_preds += preds
-        agg_preds /= len(models)
-        agg_preds = np.argmax(agg_preds, axis=1)
+        # Train the ensemble using SVGD
+        optimizer.train(train_steps)
+        models, _, _= optimizer.result()
         
-        # Plot decision boundaries using the best ensemble and uncertainty area using the first model.
-        plot_decision_boundary(y, x, models)
-        plot_decision_boundary_with_uncertainty(x, y, models[0].predict)
+        # Compute in-distribution classification metrics
+        # metrics = compute_classification_metrics(models, x_id, y_id)
+        # metrics_list.append(metrics)
         
-        print(f'Final Model Accuracy: {accuracy_score(y_true, agg_preds) * 100:.2f}%')
-        print(f'Final Model Recall: {recall_score(y_true, agg_preds) * 100:.2f}%')
-        print(f'Final Model Precision: {precision_score(y_true, agg_preds) * 100:.2f}%')
+        # Compute OOD AUROC
+        # auroc = compute_ood_auroc(models, x_id, x_ood)
+        # ood_aurocs.append(auroc)
+        x, y = next(iter(dataset.test_data.batch(dataset.test_size)))
+        
+
+        plot_decision_boundary(y.numpy(), x.numpy(), models)
+        
+        print(f"{'='*60}")
+    
+    # Aggregate and print mean and standard deviation for each metric over all runs
+    metrics_keys = ["accuracy", "precision", "recall", "f1_score", "roc_auc", "brier_score"]
+    print("\nAggregated In-Distribution Metrics over {} runs:".format(runs))
+    for key in metrics_keys:
+        values = [result[key] for result in metrics_list]
+        print(f"{key.capitalize()}: mean = {np.mean(values):.4f}, std = {np.std(values):.4f}")
+    
+    print(f"\nAggregated OOD AUROC over {runs} runs: mean = {np.mean(ood_aurocs):.4f}, std = {np.std(ood_aurocs):.4f}")

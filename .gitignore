@@ -2,3 +2,7 @@ venv/
 __pycache__/
 Example.ipynb
 static/results/
+bbb-saved/distribution0/distribution.json
+bbb-saved/distribution1/distribution.json
+bbb-saved/config.json
+bbb-saved/layers_config.txt

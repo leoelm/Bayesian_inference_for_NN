@@ -7,6 +7,8 @@ from .ADAM import ADAM
 from .BSAM import BSAM
 from .SGD import SGD
 from .VADAM import VADAM
+from .FSVI import FSVI
+from .SVGD import SVGD
 
 from os.path import dirname, basename, isfile, join
 import glob

@@ -66,6 +66,7 @@ class BayesianModel:
         """
         for interval_idx in range(len(self._layers_dtbn_intervals)):
             vector_weights: tf.Tensor = self._distributions[interval_idx].sample()
+            vector_weights = tf.cast(vector_weights, dtype=tf.float32)
             start = self._layers_dtbn_intervals[interval_idx][0]
             end = self._layers_dtbn_intervals[interval_idx][1]
             take_from = 0

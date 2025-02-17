@@ -1,5 +1,6 @@
 from .Distribution import Distribution
 from .DistributionSerializer import DistributionSerializer
+from .GammaPrior import GammaPrior
 from .GaussianPrior import GaussianPrior
 from .MultivariateNormalDiagPlusLowRank import MultivariateNormalDiagPlusLowRank
 from .Sampled import Sampled

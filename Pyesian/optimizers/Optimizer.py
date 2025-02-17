@@ -8,7 +8,7 @@ import tensorflow as tf
 import os
 import shutil
 import wandb
-from wandb.keras import WandbCallback
+from wandb.integration.keras import WandbCallback
 
 
 class Optimizer(ABC):
@@ -55,7 +55,7 @@ class Optimizer(ABC):
             raise Exception("Model Already compiled")
         else:
             self.__compiled = True
-            self._hyperparameters = hyperparameters
+            self._hyperparameters = hyperparameters # positional argument to optimizer.compile
             self._model_config = model_config
             self._dataset = dataset
             self._verbose = verbose

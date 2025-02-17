@@ -5,33 +5,8 @@ from Pyesian.nn import BayesianModel
 from Pyesian.optimizers import HMC
 from Pyesian.optimizers.hyperparameters import HyperParameters
 from Pyesian.visualisations import Metrics, Plotter
-import matplotlib.pyplot as plt
 import numpy as np
 import sklearn.metrics as skmet
-from itertools import product
-
-def visualize_data(x, y):
-    """
-    Plots the given x and y data points.
-
-    Parameters:
-      x (tf.Tensor or numpy.ndarray): Input values.
-      y (tf.Tensor or numpy.ndarray): Output values.
-    """
-    # Convert tensors to NumPy arrays if necessary.
-    x_np = x.numpy().flatten() if isinstance(x, tf.Tensor) else x.flatten()
-    y_np = y.numpy().flatten() if isinstance(y, tf.Tensor) else y.flatten()
-    
-    plt.figure(figsize=(8, 6))
-    plt.scatter(x_np, y_np, color='blue', alpha=0.5, label="Data Points")
-    # Plot the best-fit line if data follows a linear trend.
-    plt.plot(sorted(x_np), sorted(2*x + 2), color='red', linewidth=2, label="Best Fit Line")
-    plt.xlabel("x values")
-    plt.ylabel("y values")
-    plt.title("Data Visualization")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
 
 def run_experiment(epsilon, m, L, train_steps=100, n_boundaries=10):
     """
@@ -45,111 +20,96 @@ def run_experiment(epsilon, m, L, train_steps=100, n_boundaries=10):
       n_boundaries (int): Number of posterior samples for prediction.
     
     Returns:
-      mse (float): Mean squared error on the test set.
-      bayesian_model (BayesianModel): The trained model.
+      metrics_dict (dict): Dictionary of evaluation metrics.
     """
     # Create a dummy regression dataset.
     x = tf.random.uniform(shape=(600, 1), minval=1, maxval=20, dtype=tf.float32)
     y = 2 * x + 2
     
-    # Wrap the data in the Dataset class.
     dataset = Dataset(
         tf.data.Dataset.from_tensor_slices((x, y)),
         tf.keras.losses.MeanSquaredError,
         "Regression"
     )
     
-    # Build a simple model.
+    # Build model
     model = tf.keras.models.Sequential([
         tf.keras.layers.Dense(1, activation='linear', input_shape=(1,)),
         tf.keras.layers.Dense(1, activation='linear')
     ])
     
-    # Create the Prior distribution.
+    # Prior distribution
     prior = GaussianPrior(0.0, -1.0)
     
-    # Set the HMC hyperparameters.
+    # Set HMC hyperparameters
     hyperparams = HyperParameters(epsilon=epsilon, m=m, L=L)
     
-    # Instantiate and compile the HMC optimizer.
+    # Compile and train
     optimizer = HMC()
     optimizer.compile(hyperparams, model.to_json(), dataset, prior=prior)
     optimizer.train(train_steps)
     
-    # Retrieve the trained BayesianModel.
+    # Get trained model
     bayesian_model: BayesianModel = optimizer.result()
     
-    # Evaluate the model on the test set.
+    # Test set
     test_samples = dataset.test_size
     x_test, y_true = next(iter(dataset.test_data.batch(test_samples)))
-    # Get predictions using n_boundaries samples.
-    _, y_pred = bayesian_model.predict(x_test, n_boundaries)
+    
+    # Predictions with uncertainty estimates
+    all_preds, y_pred = bayesian_model.predict(x_test, n_boundaries)
+
+    y_std = all_preds.numpy() if hasattr(all_preds, "numpy") else all_preds
+    y_std = np.std(y_std)
+
+    # Compute evaluation metrics
     mse = skmet.mean_squared_error(y_true, y_pred)
+    rmse = np.sqrt(mse)
+    mae = skmet.mean_absolute_error(y_true, y_pred)
+    r2 = skmet.r2_score(y_true, y_pred)
     
-    return mse, bayesian_model
-
-def grid_search(epsilon_values, m_values, L_values, train_steps=100, n_boundaries=10):
-    """
-    Performs grid search over HMC hyperparameter ranges.
-
-    Parameters:
-      epsilon_values (list): List of ε values.
-      m_values (list): List of m values.
-      L_values (list): List of L (leapfrog steps) values.
-      train_steps (int): Number of training iterations for each experiment.
-      n_boundaries (int): Number of posterior samples for prediction.
-      
-    Returns:
-      best_params (tuple): (epsilon, m, L) with lowest MSE.
-      best_mse (float): Best (lowest) MSE achieved.
-      results (list): List of tuples (epsilon, m, L, mse) for all experiments.
-      best_model (BayesianModel): The model corresponding to the best hyperparameters.
-    """
-    best_mse = float('inf')
-    best_params = None
-    best_model = None
-    results = []
+    # Log likelihood
+    log_likelihood = np.mean(-0.5 * np.log(2 * np.pi ) - 0.5 * ((y_true - y_pred) ** 2))
     
-    for epsilon, m, L in product(epsilon_values, m_values, L_values):
-        print(f"Testing: epsilon={epsilon}, m={m}, L={L}")
-        mse, model = run_experiment(epsilon, m, L, train_steps=train_steps, n_boundaries=n_boundaries)
-        results.append((epsilon, m, L, mse))
-        print(f"--> MSE: {mse:.4f}\n")
-        if mse < best_mse:
-            best_mse = mse
-            best_params = (epsilon, m, L)
-            best_model = model
-            
-    return best_params, best_mse, results, best_model
+    # PICP: proportion of true values within 95% confidence intervals
+    lower = y_pred - 1.96 * y_std
+    upper = y_pred + 1.96 * y_std
+    picp = np.mean((y_true >= lower) & (y_true <= upper))
+    
+    # Sharpness: mean standard deviation of predictions (uncertainty measure)
+    sharpness = np.mean(y_std)
+
+    return {
+        "MSE": mse, "RMSE": rmse, "MAE": mae, "R2": r2,
+        "Log Likelihood": log_likelihood, "PICP": picp, "Sharpness": sharpness
+    }
 
 if __name__ == "__main__":
-    # Define ranges for HMC hyperparameters.
-    # epsilon_values = [0.001]
-    # m_values = [1.0]
-    # L_values = [10]
-    epsilon_values = [0.001, 0.0005, 0.0001]
-    m_values = [1.0, 0.5, 2.0]
-    L_values = [10, 30, 70]
+    # Fixed hyperparameters for HMC
+    epsilon = 0.001
+    m = 1.0
+    L = 50
+    train_steps = 50
+    n_boundaries = 10
+    num_runs = 10
+
+    results = { "MSE": [], "RMSE": [], "MAE": [], "R2": [], "Log Likelihood": [], "PICP": [], "Sharpness": [] }
     
-    # Run grid search (using 100 training steps; adjust as needed).
-    best_params, best_mse, results, best_model = grid_search(
-        epsilon_values, m_values, L_values, train_steps=100, n_boundaries=10
-    )
+    i = 0
+    while i < num_runs:
+        
+        metrics = run_experiment(epsilon, m, L, train_steps, n_boundaries)
+        if metrics['MSE'] > 1:
+            print(f"Skipping experiment due to high MSE: {metrics['MSE']}.")
+            continue
+        for key, value in metrics.items():
+            results[key].append(value)
+
+        i+=1
     
-    # Write grid search results to a log file.
-    with open('logs/HMC_regression.txt', 'w') as f:
-        print("Grid Search Results:", file=f)
-        for r in results:
-            print(f"epsilon={r[0]}, m={r[1]}, L={r[2]} => MSE: {r[3]:.4f}", file=f)
-        print(f"\nBest hyperparameters: epsilon={best_params[0]}, m={best_params[1]}, L={best_params[2]} with MSE: {best_mse:.4f}", file=f)
-    
-    # Save the best model.
-    best_model.store("model/hmc-regression-saved")
-    
-    if False:
-        # For visualization, re-create the dummy dataset.
-        x_vis = tf.random.uniform(shape=(600, 1), minval=1, maxval=20, dtype=tf.float32)
-        y_vis = 2 * x_vis + 2
-        # Get predictions using the best model.
-        _, y_pred = best_model.predict(x_vis, n_boundaries=10)
-        visualize_data(x_vis, y_pred)
+    # Compute mean and standard deviation for each metric
+    summary = {key: (np.mean(values), np.std(values)) for key, values in results.items()}
+
+    # Print results
+    for metric, (mean, std) in summary.items():
+        print(f"{metric}: Mean={mean:.4f}, Std={std:.4f}")
